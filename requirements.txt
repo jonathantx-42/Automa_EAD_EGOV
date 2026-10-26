@@ -1,0 +1,6 @@
+pandas
+openpyxl
+playwright
+customtkinter
+tkcalendar
+babel

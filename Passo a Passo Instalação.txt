@@ -1,0 +1,18 @@
+Passo 1: Instalar o Python no computador
+Acesse o site oficial: python.org/downloads 
+ e baixe o instalador do Python (versão 3.10, 3.11 ou 3.12).
+Ao abrir o instalador, MUITO IMPORTANTE: marque a caixinha Add Python to PATH (ou Adicionar Python ao PATH) na parte inferior da primeira tela antes de clicar em Install Now.
+Passo 2: Instalar as Bibliotecas da Automação
+
+Criamos um arquivo automatizado chamado instalar_requisitos.bat e o requirements.txt na pasta do projeto.
+
+Opção A: Com 2 cliques (Mais Fácil)
+
+Basta dar duplo clique no arquivo instalar_requisitos.bat. Ele fará tudo sozinho:
+
+Instalará as bibliotecas necessárias:
+pandas e openpyxl: para ler e formatar as planilhas Excel e CSVs.
+playwright: para controlar o navegador nas automações do GDF e do Moodle.
+customtkinter: para desenhar a interface gráfica moderna.
+tkcalendar e babel: para os calendários de seleção de datas.
+Instalará o navegador Chromium interno que o Playwright utiliza. 
