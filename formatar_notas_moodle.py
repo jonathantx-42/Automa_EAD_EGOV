@@ -22,6 +22,7 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from logger_util import AutoLogger
 
 # Configuração segura para evitar erros de acentuação no terminal do Windows
 if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -98,6 +99,10 @@ def definir_status(nota, nota_minima):
 
 def formatar_notas_gui(data_curso_global, log_fn=print):
     """Execução do processo de formatação tanto para GUI quanto para terminal"""
+    logger = AutoLogger("Formatar_SEDOC", callback_console=log_fn)
+    def log(msg):
+        logger.log(msg)
+
     pasta_atual = os.path.dirname(os.path.abspath(__file__))
     pasta_saida = os.path.join(pasta_atual, "Arquivos_Finais_SEDOC")
     os.makedirs(pasta_saida, exist_ok=True)
@@ -119,22 +124,26 @@ def formatar_notas_gui(data_curso_global, log_fn=print):
     ]
 
     if len(arquivos_excel) == 0:
-        log_fn("\n❌ Nenhum arquivo de Notas (.xlsx) de alunos foi encontrado (verifique a pasta 'Arquivos_Originais_Moodle').")
-        log_fn("Certifique-se de que os arquivos de notas baixados do Moodle estão na pasta correta.")
+        log("\n❌ Nenhum arquivo de Notas (.xlsx) de alunos foi encontrado (verifique a pasta 'Arquivos_Originais_Moodle').")
+        log("Certifique-se de que os arquivos de notas baixados do Moodle estão na pasta correta.")
+        logger.finalizar(status_geral="Nenhum arquivo de notas encontrado")
         return
 
-    log_fn("=" * 60)
-    log_fn("📊 AVALIAÇÃO E FORMATAÇÃO DE NOTAS - EGOV")
-    log_fn("=" * 60)
-    log_fn(f"Foram encontrados {len(arquivos_excel)} arquivos de notas para processamento.")
-    log_fn(f"Período do curso informado: {data_curso_global}\n")
-    log_fn("-" * 60)
+    log("=" * 60)
+    log("📊 AVALIAÇÃO E FORMATAÇÃO DE NOTAS - EGOV")
+    log("=" * 60)
+    log(f"Foram encontrados {len(arquivos_excel)} arquivos de notas para processamento.")
+    log(f"Período do curso informado: {data_curso_global}\n")
+    log("-" * 60)
 
     total_processados = 0
 
     for arquivo in arquivos_excel:
         nome_base = os.path.basename(arquivo)
-        log_fn(f"Processando turma: {nome_base}...")
+        item_identificador = f"Planilha {nome_base}"
+        logger.iniciar_item(item_identificador)
+
+        log(f"Processando turma: {nome_base}...")
 
         try:
             # Descobre a sigla e a turma com base no nome do arquivo
@@ -254,16 +263,21 @@ def formatar_notas_gui(data_curso_global, log_fn=print):
             caminho_saida_excel = os.path.join(pasta_saida, novo_nome)
             wb.save(caminho_saida_excel)
 
-            log_fn(f"  -> ✅ Avaliado e formatado com sucesso! Salvo em: Arquivos_Finais_SEDOC/{novo_nome}")
+            logger.finalizar_item(item_identificador, status="Sucesso", detalhes=f"Salvo: {novo_nome}")
+            log(f"  -> ✅ Avaliado e formatado com sucesso! Salvo em: Arquivos_Finais_SEDOC/{novo_nome}")
             total_processados += 1
 
         except Exception as e:
-            log_fn(f"  -> ❌ ERRO ao processar '{nome_base}': {e}")
+            logger.finalizar_item(item_identificador, status="Falha", detalhes=str(e))
+            log(f"  -> ❌ ERRO ao processar '{nome_base}': {e}")
 
-    log_fn("\n" + "=" * 60)
-    log_fn(f"🎉 Processo finalizado! {total_processados} planilhas formatadas na pasta:")
-    log_fn(f"📂 {pasta_saida}")
-    log_fn("=" * 60)
+    status_geral = f"{total_processados} de {len(arquivos_excel)} planilhas formatadas com sucesso"
+    logger.finalizar(status_geral=status_geral)
+
+    log("\n" + "=" * 60)
+    log(f"🎉 Processo finalizado! {total_processados} planilhas formatadas na pasta:")
+    log(f"📂 {pasta_saida}")
+    log("=" * 60)
 
 if __name__ == "__main__":
     # Abre seletor com calendário drop-down para evitar digitação manual

@@ -75,7 +75,7 @@ playwright install chromium
 - **Botão rápido:** `📂 Abrir Arquivos_Originais_Sistema`.
 
 ### 2. 🛠️ Aba: Tratar p/ Moodle (`tratar_csv_moodle.py`)
-- **O que faz:** Lê de `Arquivos_Originais_Sistema/`, formata nomes em Title Case, formata CPFs com 11 dígitos/zeros e converte e-mails para minúsculas.
+- **O que faz:** Lê de `Arquivos_Originais_Sistema/`, formata nomes em Title Case, formata CPFs (username e password) com 11 dígitos/zeros e converte e-mails para minúsculas.
 - **Destino dos arquivos:** Salva em `Arquivos_CARREGAR/` no padrão `... - CARREGAR.csv`.
 - **Botão rápido:** `📂 Abrir Pasta Arquivos_CARREGAR`.
 

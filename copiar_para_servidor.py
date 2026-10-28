@@ -16,6 +16,7 @@ import sys
 import glob
 import re
 import shutil
+from logger_util import AutoLogger
 
 # Configuração segura de codificação para o Windows
 if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -103,24 +104,29 @@ def encontrar_ou_criar_pasta_turma(pasta_curso, turma_num, ano):
 
 def copiar_arquivos_para_servidor(caminho_servidor=CAMINHO_SERVIDOR_PADRAO, callback_confirmar=None, log_fn=print):
     """
-    Varre os arquivos locais e copia para o servidor/diretório de rede.
+    Varre os arquivos locais e copia para o servidor/diretório de rede com gravação em log.
     
     callback_confirmar: função(nome_arquivo, pasta_destino) -> 'sim', 'todos', 'nao', 'pular_todos', 'cancelar'
     """
+    logger = AutoLogger("Mover_Arquivos_Servidor", callback_console=log_fn)
+    def log(msg):
+        logger.log(msg)
+
     pasta_base_local = os.path.dirname(os.path.abspath(__file__))
     pasta_carregar = os.path.join(pasta_base_local, "Arquivos_CARREGAR")
     pasta_sedoc = os.path.join(pasta_base_local, "Arquivos_Finais_SEDOC")
 
-    log_fn("=" * 65)
-    log_fn("📂 CÓPIA DE ARQUIVOS FINAIS PARA O SERVIDOR DE ARQUIVOS")
-    log_fn("=" * 65)
-    log_fn(f"Destino Servidor: {caminho_servidor}")
-    log_fn("-" * 65)
+    log("=" * 65)
+    log("📂 CÓPIA DE ARQUIVOS FINAIS PARA O SERVIDOR DE ARQUIVOS")
+    log("=" * 65)
+    log(f"Destino Servidor: {caminho_servidor}")
+    log("-" * 65)
 
     if not os.path.exists(caminho_servidor):
-        log_fn(f"❌ ERRO: O caminho do servidor não foi encontrado ou não está acessível:")
-        log_fn(f"   {caminho_servidor}")
-        log_fn("   Verifique se o disco de rede (D:) está conectado.")
+        log(f"❌ ERRO: O caminho do servidor não foi encontrado ou não está acessível:")
+        log(f"   {caminho_servidor}")
+        log("   Verifique se o disco de rede (D:) está conectado.")
+        logger.finalizar(status_geral="Caminho do servidor inacessível")
         return {
             "sucesso": False,
             "motivo": "Caminho do servidor inacessível",
@@ -141,13 +147,14 @@ def copiar_arquivos_para_servidor(caminho_servidor=CAMINHO_SERVIDOR_PADRAO, call
                 arquivos_fila.append((f, "SEDOC"))
 
     if not arquivos_fila:
-        log_fn("⚠️ Nenhum arquivo encontrado nas pastas:")
-        log_fn(f"   • {pasta_carregar}")
-        log_fn(f"   • {pasta_sedoc}")
-        log_fn("Execute primeiro as etapas 2 (Tratar CSV) e/ou 4 (Formatar SEDOC).")
+        log("⚠️ Nenhum arquivo encontrado nas pastas:")
+        log(f"   • {pasta_carregar}")
+        log(f"   • {pasta_sedoc}")
+        log("Execute primeiro as etapas 2 (Tratar CSV) e/ou 4 (Formatar SEDOC).")
+        logger.finalizar(status_geral="Nenhum arquivo para copiar")
         return {"sucesso": True, "copiados": 0, "ignorados": 0}
 
-    log_fn(f"Foram encontrados {len(arquivos_fila)} arquivo(s) prontos para copiar.\n")
+    log(f"Foram encontrados {len(arquivos_fila)} arquivo(s) prontos para copiar.\n")
 
     modo_sobrescrita = "perguntar"  # 'perguntar', 'todos', 'pular_todos'
     total_copiados = 0
@@ -157,11 +164,14 @@ def copiar_arquivos_para_servidor(caminho_servidor=CAMINHO_SERVIDOR_PADRAO, call
     for idx, (caminho_origem, tipo) in enumerate(arquivos_fila, start=1):
         nome_arquivo = os.path.basename(caminho_origem)
         sigla, turma_num, ano = extrair_info_arquivo(nome_arquivo)
+        item_identificador = f"Arquivo {nome_arquivo}"
 
         if not sigla or turma_num is None:
-            log_fn(f"[{idx}/{len(arquivos_fila)}] ⚠️ Não foi possível identificar Curso/Turma no arquivo: {nome_arquivo}")
+            log(f"[{idx}/{len(arquivos_fila)}] ⚠️ Não foi possível identificar Curso/Turma no arquivo: {nome_arquivo}")
             total_erros += 1
             continue
+
+        logger.iniciar_item(item_identificador)
 
         try:
             pasta_curso = encontrar_pasta_curso(caminho_servidor, sigla)
@@ -170,15 +180,16 @@ def copiar_arquivos_para_servidor(caminho_servidor=CAMINHO_SERVIDOR_PADRAO, call
 
             # Verifica se já existe no destino
             if os.path.exists(caminho_destino):
-                log_fn(f"[{idx}/{len(arquivos_fila)}] ⚠️ Arquivo já existe no destino: {nome_arquivo}")
-                log_fn(f"   📁 Destino: {pasta_turma}")
+                log(f"[{idx}/{len(arquivos_fila)}] ⚠️ Arquivo já existe no destino: {nome_arquivo}")
+                log(f"   📁 Destino: {pasta_turma}")
 
                 if modo_sobrescrita == "pular_todos":
-                    log_fn("   ⏩ Pulado (opção Pular Todos ativa).")
+                    log("   ⏩ Pulado (opção Pular Todos ativa).")
+                    logger.finalizar_item(item_identificador, status="Ignorado", detalhes="Já existe no destino (pular todos)")
                     total_ignorados += 1
                     continue
                 elif modo_sobrescrita == "todos":
-                    log_fn("   🔄 Substituindo (opção Substituir Todos ativa)...")
+                    log("   🔄 Substituindo (opção Substituir Todos ativa)...")
                 else:
                     # Pergunta se pode sobrescrever
                     if callback_confirmar:
@@ -199,44 +210,52 @@ def copiar_arquivos_para_servidor(caminho_servidor=CAMINHO_SERVIDOR_PADRAO, call
                             resp = 'nao'
 
                     if resp == 'cancelar':
-                        log_fn("\n🛑 Operação cancelada pelo usuário.")
+                        log("\n🛑 Operação cancelada pelo usuário.")
+                        logger.finalizar_item(item_identificador, status="Cancelado", detalhes="Cancelado pelo usuário")
                         break
                     elif resp == 'todos':
                         modo_sobrescrita = 'todos'
-                        log_fn("   🔄 Substituindo este e todos os próximos...")
+                        log("   🔄 Substituindo este e todos os próximos...")
                     elif resp == 'pular_todos':
                         modo_sobrescrita = 'pular_todos'
-                        log_fn("   ⏩ Pulando este e todos os próximos existentes.")
+                        log("   ⏩ Pulando este e todos os próximos existentes.")
+                        logger.finalizar_item(item_identificador, status="Ignorado", detalhes="Já existe no destino")
                         total_ignorados += 1
                         continue
                     elif resp == 'nao':
-                        log_fn("   ⏩ Arquivo ignorado por decisão do usuário.")
+                        log("   ⏩ Arquivo ignorado por decisão do usuário.")
+                        logger.finalizar_item(item_identificador, status="Ignorado", detalhes="Decisão do usuário")
                         total_ignorados += 1
                         continue
                     else:
-                        log_fn("   🔄 Substituindo arquivo...")
+                        log("   🔄 Substituindo arquivo...")
 
             else:
-                log_fn(f"[{idx}/{len(arquivos_fila)}] 📋 Copiando: {nome_arquivo}")
-                log_fn(f"   -> Destino: {pasta_turma}")
+                log(f"[{idx}/{len(arquivos_fila)}] 📋 Copiando: {nome_arquivo}")
+                log(f"   -> Destino: {pasta_turma}")
 
             # Efetua a cópia mantendo os atributos originais
             shutil.copy2(caminho_origem, caminho_destino)
-            log_fn("   ✅ Copiado com sucesso!")
+            logger.finalizar_item(item_identificador, status="Sucesso", detalhes=f"Copiado para: {pasta_turma}")
+            log("   ✅ Copiado com sucesso!")
             total_copiados += 1
 
         except Exception as e:
-            log_fn(f"   ❌ ERRO ao copiar '{nome_arquivo}': {e}")
+            logger.finalizar_item(item_identificador, status="Falha", detalhes=str(e))
+            log(f"   ❌ ERRO ao copiar '{nome_arquivo}': {e}")
             total_erros += 1
 
-    log_fn("\n" + "=" * 65)
-    log_fn("🎉 RESUMO DA SINCRONIZAÇÃO COM O SERVIDOR:")
-    log_fn(f"   • Total de arquivos copiados / atualizados: {total_copiados}")
-    log_fn(f"   • Total de arquivos pulados: {total_ignorados}")
+    status_geral = f"{total_copiados} copiado(s), {total_ignorados} pulado(s), {total_erros} erro(s)"
+    logger.finalizar(status_geral=status_geral)
+
+    log("\n" + "=" * 65)
+    log("🎉 RESUMO DA SINCRONIZAÇÃO COM O SERVIDOR:")
+    log(f"   • Total de arquivos copiados / atualizados: {total_copiados}")
+    log(f"   • Total de arquivos pulados: {total_ignorados}")
     if total_erros > 0:
-        log_fn(f"   • Erros encontrados: {total_erros}")
-    log_fn(f"   • Arquivos locais preservados em seu computador.")
-    log_fn("=" * 65)
+        log(f"   • Erros encontrados: {total_erros}")
+    log(f"   • Arquivos locais preservados em seu computador.")
+    log("=" * 65)
 
     return {
         "sucesso": True,

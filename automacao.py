@@ -20,6 +20,7 @@ import getpass
 from datetime import datetime
 import pandas as pd
 from playwright.sync_api import sync_playwright
+from logger_util import AutoLogger
 
 # Configuração segura para evitar erros de acentuação no terminal do Windows
 if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -96,19 +97,29 @@ def executar_automacao():
     executar_automacao_gui(usuario, senha, orgao)
 
 def executar_automacao_gui(usuario, senha, orgao="SEEC", log_fn=print):
-    print("=" * 60)
-    print(">> AUTOMAÇÃO EGOV - DOWNLOAD DE INSCRITOS DOS CURSOS EAD")
-    print("=" * 60)
+    logger = AutoLogger("Inscritos_GDF", usuario=usuario, callback_console=log_fn)
+    def log(msg):
+        logger.log(msg)
+
+    log("=" * 60)
+    log(">> AUTOMAÇÃO EGOV - DOWNLOAD DE INSCRITOS DOS CURSOS EAD")
+    log("=" * 60)
 
     # 1. Garante que a pasta de downloads existe
     os.makedirs(PASTA_DOWNLOADS, exist_ok=True)
 
     # 2. Carrega a planilha de cursos a baixar
     if not os.path.exists(ARQUIVO_PLANILHA):
-        print(f"[ERRO] Planilha '{ARQUIVO_PLANILHA}' não encontrada!")
+        log(f"[ERRO] Planilha '{ARQUIVO_PLANILHA}' não encontrada!")
+        logger.finalizar(status_geral="Falha: Planilha não encontrada")
         return
 
-    df_cursos = pd.read_excel(ARQUIVO_PLANILHA, sheet_name='TURMAS')
+    try:
+        df_cursos = pd.read_excel(ARQUIVO_PLANILHA, sheet_name='TURMAS')
+    except Exception as e:
+        log(f"[ERRO] Falha ao ler a planilha: {e}")
+        logger.finalizar(status_geral=f"Falha ao ler planilha: {e}")
+        return
     
     # Extrai TurmaId do novo link de sistema (LINK FORMULÁRIO)
     if 'LINK FORMULÁRIO' in df_cursos.columns:
@@ -118,18 +129,18 @@ def executar_automacao_gui(usuario, senha, orgao="SEEC", log_fn=print):
 
     # Inicia o navegador com Playwright
     with sync_playwright() as p:
-        print("\n[NAVEGADOR] Abrindo navegador...")
+        log("\n[NAVEGADOR] Abrindo navegador...")
         browser = p.chromium.launch(headless=False, slow_mo=400)
         page = browser.new_page()
 
         # ==========================================
         # ETAPA 1: LOGIN NO PORTAL DE SISTEMAS
         # ==========================================
-        print(f"\n[ETAPA 1] Acessando {URL_LOGIN}...")
+        log(f"\n[ETAPA 1] Acessando {URL_LOGIN}...")
         page.goto(URL_LOGIN)
         page.wait_for_selector("#Input_UsernameVal")
 
-        print(f"[ETAPA 1] Preenchendo credenciais do usuário '{usuario}' e órgão '{orgao}'...")
+        log(f"[ETAPA 1] Preenchendo credenciais do usuário '{usuario}' e órgão '{orgao}'...")
         page.fill("#Input_UsernameVal", usuario)
         page.fill("#Input_PasswordVal", senha)
         page.select_option("#DropdownOrgao", label=orgao)
@@ -137,48 +148,49 @@ def executar_automacao_gui(usuario, senha, orgao="SEEC", log_fn=print):
 
         try:
             page.wait_for_url("**/GaleriaSistemas", timeout=15000)
-            print("[ETAPA 1] ✅ Login realizado com sucesso!")
+            log("[ETAPA 1] ✅ Login realizado com sucesso!")
         except Exception:
             # Verifica se apareceu mensagem de erro na tela de login
             msg_erro = page.locator(".feedback-message, .ValidationMessage").all_inner_texts()
             detalhe = f" Detalhe: {' | '.join(msg_erro)}" if msg_erro else ""
-            print(f"\n❌ [FALHA NO LOGIN] Não foi possível logar no sistema.{detalhe}")
-            print("Verifique se seu usuário, senha ou órgão foram digitados corretamente.")
+            log(f"\n❌ [FALHA NO LOGIN] Não foi possível logar no sistema.{detalhe}")
+            log("Verifique se seu usuário, senha ou órgão foram digitados corretamente.")
+            logger.finalizar(status_geral="Falha no Login")
             browser.close()
             return
 
         # ==========================================
         # ETAPA 2: ACESSO AO SISTEMA EGOV
         # ==========================================
-        print("\n[ETAPA 2] Entrando no sistema EGOV...")
+        log("\n[ETAPA 2] Entrando no sistema EGOV...")
         card_egov = page.locator('text="EGOV"')
         card_egov.first.wait_for(timeout=15000)
         card_egov.first.click()
 
         page.wait_for_url("**/egov/**", timeout=20000)
         page.wait_for_load_state("networkidle")
-        print("[ETAPA 2] ✅ Tela de Turmas do EGOV carregada com sucesso!")
+        log("[ETAPA 2] ✅ Tela de Turmas do EGOV carregada com sucesso!")
 
         # ==========================================
         # ETAPA 3: APLICAÇÃO DOS FILTROS E BUSCA
         # ==========================================
-        print("\n[ETAPA 3] Aplicando filtros de busca...")
-        print("   -> Modalidade: EAD")
+        log("\n[ETAPA 3] Aplicando filtros de busca...")
+        log("   -> Modalidade: EAD")
         page.locator('select:has(option:text-is("EAD"))').select_option(label="EAD")
 
-        print("   -> Situação Abertura Turma: Fechada")
+        log("   -> Situação Abertura Turma: Fechada")
         page.locator('label:has-text("Fechada")').click()
 
-        print("   -> Clicando em 'Pesquisar'...")
+        log("   -> Clicando em 'Pesquisar'...")
         page.click('input[value="Pesquisar"]')
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(3000)
-        print("[ETAPA 3] ✅ Turmas pesquisadas e tabela carregada!")
+        log("[ETAPA 3] ✅ Turmas pesquisadas e tabela carregada!")
 
         # ==========================================
         # ETAPA 4: DOWNLOAD DOS ARQUIVOS .CSV
         # ==========================================
-        print("\n[ETAPA 4] Iniciando download dos arquivos .csv das turmas...")
+        log("\n[ETAPA 4] Iniciando download dos arquivos .csv das turmas...")
 
         total_baixados = 0
         hora_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -234,32 +246,37 @@ def executar_automacao_gui(usuario, senha, orgao="SEEC", log_fn=print):
             turma_num = formatar_turma(row.get('TURMA', ''))
             ano = extrair_ano(row.get('DATA INÍCIO', '2026'))
             nome_curso = str(row.get('Curso', 'Curso')).strip()
+            item_identificador = f"Turma {turma_id} ({sigla} - Turma {turma_num})"
 
             if not turma_id:
-                print(f"   [AVISO] Linha {index + 1}: Sem TurmaId válido. Pulando...")
+                log(f"   [AVISO] Linha {index + 1}: Sem TurmaId válido. Pulando...")
                 continue
+
+            logger.iniciar_item(item_identificador)
 
             nome_arquivo_destino = f"{sigla} {turma_num}.{ano} - Sistema.csv"
             nome_arquivo_destino = re.sub(r'[\\/*?:"<>|]', "", nome_arquivo_destino)
             caminho_salvar = os.path.join(PASTA_DOWNLOADS, nome_arquivo_destino)
 
-            print(f"\n   [CURSO {index + 1}/{len(df_cursos)}] Buscando ID {turma_id}: {nome_curso} ({sigla} - Turma {turma_num})...")
+            log(f"\n   [CURSO {index + 1}/{len(df_cursos)}] Buscando ID {turma_id}: {nome_curso} ({sigla} - Turma {turma_num})...")
 
             # Localiza a linha da tabela navegando pelas páginas
             linha_tabela, num_pag = localizar_turma_com_paginacao(turma_id)
 
             if linha_tabela is None:
-                print(f"   -> [AVISO] Turma {turma_id} não encontrada em nenhuma página da tabela.")
+                log(f"   -> [AVISO] Turma {turma_id} não encontrada em nenhuma página da tabela.")
+                logger.finalizar_item(item_identificador, status="Não Encontrada", detalhes="Não encontrada na listagem")
                 continue
 
             # Localiza o ícone de folha (Download Relatório CSV) na linha
             botao_download = linha_tabela.locator('a[title*="Download Relat"], a:has(.fa-file-text-o)').first
 
             if botao_download.count() == 0:
-                print(f"   -> [AVISO] Botão de download não encontrado na linha da turma {turma_id}.")
+                log(f"   -> [AVISO] Botão de download não encontrado na linha da turma {turma_id}.")
+                logger.finalizar_item(item_identificador, status="Sem Botão Download", detalhes="Ícone de download não localizado")
                 continue
 
-            print(f"   -> Clicando no ícone de folha para baixar...")
+            log(f"   -> Clicando no ícone de folha para baixar...")
             try:
                 with page.expect_download(timeout=25000) as download_info:
                     botao_download.click()
@@ -268,21 +285,26 @@ def executar_automacao_gui(usuario, senha, orgao="SEEC", log_fn=print):
                 download.save_as(caminho_salvar)
                 
                 tamanho_kb = os.path.getsize(caminho_salvar) / 1024
-                print(f"   -> [SUCESSO] Salvo como: \"{nome_arquivo_destino}\" ({tamanho_kb:.1f} KB)")
+                dur = logger.finalizar_item(item_identificador, status="Sucesso", detalhes=f"Salvo: {nome_arquivo_destino} ({tamanho_kb:.1f} KB)")
+                log(f"   -> [SUCESSO] Salvo como: \"{nome_arquivo_destino}\" ({tamanho_kb:.1f} KB)")
 
                 total_baixados += 1
             except Exception as e:
-                print(f"   -> [ERRO] Falha ao baixar turma {turma_id}: {e}")
+                logger.finalizar_item(item_identificador, status="Falha", detalhes=str(e))
+                log(f"   -> [ERRO] Falha ao baixar turma {turma_id}: {e}")
 
             page.wait_for_timeout(2000)
 
         # Atualização no console
-        print(f"\n[INFO] Os logs de download foram exibidos acima. O arquivo original Excel '{os.path.basename(ARQUIVO_PLANILHA)}' não será alterado para preservar suas formatações.")
+        log(f"\n[INFO] Os logs de download foram exibidos acima. O arquivo original Excel '{os.path.basename(ARQUIVO_PLANILHA)}' não será alterado para preservar suas formatações.")
 
-        print("\n" + "=" * 60)
-        print(f">> CONCLUÍDO! Total de {total_baixados} de {len(df_cursos)} arquivos baixados.")
-        print(f">> Arquivos salvos na pasta: {PASTA_DOWNLOADS}")
-        print("=" * 60)
+        status_geral = f"{total_baixados} de {len(df_cursos)} arquivos baixados"
+        logger.finalizar(status_geral=status_geral)
+
+        log("\n" + "=" * 60)
+        log(f">> CONCLUÍDO! Total de {total_baixados} de {len(df_cursos)} arquivos baixados.")
+        log(f">> Arquivos salvos na pasta: {PASTA_DOWNLOADS}")
+        log("=" * 60)
 
         page.wait_for_timeout(3000)
         browser.close()

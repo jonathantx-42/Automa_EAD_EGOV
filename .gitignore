@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec
+
+# Ambientes virtuais
+.venv/
+venv/
+ENV/
+
+# Planilhas com dados reais e backups
+*.xlsx
+*.xls
+!EAD_Controle_Geral_Modelo.xlsx
+
+# Arquivos de dados de alunos (CSVs e planilhas)
+Arquivos_Originais_Sistema/
+Arquivos_Originais_Moodle/
+Arquivos_CARREGAR/
+Arquivos_Finais_SEDOC/
+downloads/
+Prontos_Para_Moodle/
+
+# Logs de execução (podem conter nomes de servidores e turmas)
+logs/
+*.log
+
+# Arquivos do sistema operacional
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/

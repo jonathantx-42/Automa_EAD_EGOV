@@ -187,7 +187,7 @@ class AppEGOV(ctk.CTk):
             tab, 
             text="Formata os arquivos CSV da pasta 'Arquivos_Originais_Sistema/':\n"
                  "• Padroniza Nomes e Sobrenomes (Primeira Letra Maiúscula);\n"
-                 "• Formata o CPF (username) com 11 dígitos e zeros à esquerda;\n"
+                 "• Formata o CPF (username e password) com 11 dígitos e zeros à esquerda;\n"
                  "• Converte e-mails para minúsculas;\n"
                  "• Salva na pasta 'Arquivos_CARREGAR/' com o sufixo '... - CARREGAR.csv'.",
             text_color="gray", justify="left"
@@ -584,7 +584,7 @@ class AppEGOV(ctk.CTk):
     def _exec_tratar(self):
         try:
             from tratar_csv_moodle import tratar_arquivos_csv
-            tratar_arquivos_csv()
+            tratar_arquivos_csv(log_fn=self.log)
         except Exception as e:
             self.log(f"\n❌ Erro durante o tratamento: {e}")
         finally:

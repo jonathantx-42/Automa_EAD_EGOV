@@ -6,7 +6,7 @@ O que este script faz:
 2. Lê os arquivos com a codificação correta do sistema (UTF-16LE com separador ';').
 3. Remove linhas vazias.
 4. Padroniza Nomes e Sobrenomes para Capitalizado (Primeira Letra Maiúscula).
-5. Formata o CPF (username) com 11 dígitos numéricos e zeros à esquerda.
+5. Formata o CPF (username e password) com 11 dígitos numéricos e zeros à esquerda.
 6. Padroniza e-mails para letras minúsculas.
 7. Substitui "Sistema" por "CARREGAR" no nome do arquivo.
 8. Salva os arquivos prontos e compatíveis na pasta 'Prontos_Para_Moodle/'.
@@ -17,6 +17,7 @@ import sys
 import glob
 import re
 import pandas as pd
+from logger_util import AutoLogger
 
 # Configuração segura para evitar erros de acentuação no terminal do Windows
 if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -28,7 +29,11 @@ if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encodi
     except Exception:
         pass
 
-def tratar_arquivos_csv():
+def tratar_arquivos_csv(log_fn=print):
+    logger = AutoLogger("Tratar_CSVs_Moodle", callback_console=log_fn)
+    def log(msg):
+        logger.log(msg)
+
     # 1. Identifica a pasta atual do script
     pasta_atual = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,21 +61,25 @@ def tratar_arquivos_csv():
     arquivos_csv = [arq for arq in arquivos_csv if "Arquivos_CARREGAR" not in arq and "Prontos_Para_Moodle" not in arq]
 
     if len(arquivos_csv) == 0:
-        print("❌ Nenhum arquivo CSV foi encontrado para processar (verifique a pasta 'Arquivos_Originais_Sistema').")
+        log("❌ Nenhum arquivo CSV foi encontrado para processar (verifique a pasta 'Arquivos_Originais_Sistema').")
+        logger.finalizar(status_geral="Nenhum arquivo CSV encontrado")
         return
 
-    print("=" * 60)
-    print("🛠️ TRATAMENTO DE ARQUIVOS CSV PARA O MOODLE")
-    print("=" * 60)
-    print(f"Iniciando automação... Foram encontrados {len(arquivos_csv)} arquivos CSV.")
-    print("-" * 60)
+    log("=" * 60)
+    log("🛠️ TRATAMENTO DE ARQUIVOS CSV PARA O MOODLE")
+    log("=" * 60)
+    log(f"Iniciando automação... Foram encontrados {len(arquivos_csv)} arquivos CSV.")
+    log("-" * 60)
 
     total_tratados = 0
 
     # 4. Processa cada arquivo individualmente
     for arquivo in arquivos_csv:
         nome_arquivo = os.path.basename(arquivo)
-        print(f"Processando: {nome_arquivo}...")
+        item_identificador = f"Arquivo {nome_arquivo}"
+        logger.iniciar_item(item_identificador)
+
+        log(f"Processando: {nome_arquivo}...")
 
         try:
             # Lê o arquivo original (UTF-16LE com separador ponto e vírgula)
@@ -88,10 +97,11 @@ def tratar_arquivos_csv():
                 if coluna in df.columns:
                     df[coluna] = df[coluna].astype(str).str.strip().str.title()
 
-            # Formata o CPF (username) com 11 dígitos e zeros à esquerda
-            if 'username' in df.columns:
-                df['username'] = df['username'].astype(str).str.split('.').str[0]
-                df['username'] = df['username'].str.replace(r'\D', '', regex=True).str.zfill(11)
+            # Formata o CPF (username e password) com 11 dígitos e zeros à esquerda
+            for coluna_cpf in ['username', 'password']:
+                if coluna_cpf in df.columns:
+                    df[coluna_cpf] = df[coluna_cpf].astype(str).str.split('.').str[0]
+                    df[coluna_cpf] = df[coluna_cpf].str.replace(r'\D', '', regex=True).str.zfill(11)
 
             # Padroniza E-mails para minúsculas
             if 'email' in df.columns:
@@ -110,16 +120,21 @@ def tratar_arquivos_csv():
             # Exporta em latin1 / sep ';' conforme padrão de importação do Moodle
             df.to_csv(caminho_saida, index=False, encoding='latin1', sep=';')
 
-            print(f"  -> ✅ Concluído! Salvo como: {novo_nome} ({len(df)} alunos)")
+            logger.finalizar_item(item_identificador, status="Sucesso", detalhes=f"Salvo: {novo_nome} ({len(df)} alunos)")
+            log(f"  -> ✅ Concluído! Salvo como: {novo_nome} ({len(df)} alunos)")
             total_tratados += 1
 
         except Exception as e:
-            print(f"  -> ❌ ERRO ao processar '{nome_arquivo}': {e}")
+            logger.finalizar_item(item_identificador, status="Falha", detalhes=str(e))
+            log(f"  -> ❌ ERRO ao processar '{nome_arquivo}': {e}")
 
-    print("-" * 60)
-    print(f"🎉 Automação finalizada! {total_tratados} arquivos prontos na pasta:")
-    print(f"📂 {pasta_saida}")
-    print("=" * 60)
+    status_geral = f"{total_tratados} de {len(arquivos_csv)} arquivos tratados com sucesso"
+    logger.finalizar(status_geral=status_geral)
+
+    log("-" * 60)
+    log(f"🎉 Automação finalizada! {total_tratados} arquivos prontos na pasta:")
+    log(f"📂 {pasta_saida}")
+    log("=" * 60)
 
 if __name__ == "__main__":
     tratar_arquivos_csv()

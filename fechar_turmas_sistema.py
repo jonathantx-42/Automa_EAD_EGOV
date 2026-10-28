@@ -405,6 +405,7 @@ def fechar_turmas_gui(usuario, senha, orgao="SEEC", log_fn=print):
 
             if not sucesso_1:
                 log(f"   ❌ [ERRO] Botão 'Sim' da 1ª confirmação não foi encontrado para a turma {turma_id}.")
+                logger.finalizar_item(item_identificador, status="Falha", detalhes="Botão Sim da 1ª confirmação não encontrado")
                 frames_info = [f.url for f in page.frames]
                 log(f"   [DIAGNÓSTICO] Frames detectados na tela: {frames_info}")
                 if popup_window and not popup_window.is_closed():
@@ -474,6 +475,7 @@ def fechar_turmas_gui(usuario, senha, orgao="SEEC", log_fn=print):
 
             if sucesso:
                 tempo_total = time.time() - tempo_inicio
+                logger.finalizar_item(item_identificador, status="Sucesso", detalhes=f"Confirmado em {tempo_total:.1f}s")
                 log(f"   ✅ [SUCESSO] Turma {turma_id} ({nome_curso}) fechada com sucesso! (Confirmado em {tempo_total:.1f}s)")
                 total_fechadas += 1
 
@@ -495,6 +497,7 @@ def fechar_turmas_gui(usuario, senha, orgao="SEEC", log_fn=print):
                     except Exception:
                         pass
             else:
+                logger.finalizar_item(item_identificador, status="Falha", detalhes="Tempo limite excedido aguardando confirmação")
                 log(f"   ⚠️ [ATENÇÃO] Tempo limite atingido ao aguardar confirmação da turma {turma_id}.")
 
             page.wait_for_timeout(1000)
@@ -506,6 +509,9 @@ def fechar_turmas_gui(usuario, senha, orgao="SEEC", log_fn=print):
                     aplicar_pesquisa_aberta()
                 except Exception as e:
                     log(f"   ⚠️ Aviso ao atualizar pesquisa: {e}")
+
+        status_geral = f"{total_fechadas} de {len(df_turmas)} turmas fechadas com sucesso"
+        logger.finalizar(status_geral=status_geral)
 
         log("\n" + "=" * 65)
         log(f">> CONCLUÍDO! Total de {total_fechadas} de {len(df_turmas)} turmas fechadas com sucesso.")
